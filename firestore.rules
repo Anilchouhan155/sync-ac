@@ -9,19 +9,29 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Flat data is accessible if you are signed in
     match /flats/{flatId} {
       allow get: if isSignedIn();
       allow create: if isSignedIn();
-      
+
       match /rooms/{roomName} {
         allow read: if isSignedIn();
         allow write: if isSignedIn();
       }
+
+      match /logs/{logId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+      }
+
+      match /requests/{requestId} {
+        allow read: if isSignedIn();
+        allow create: if isSignedIn();
+        allow delete: if isSignedIn();
+      }
     }
 
     match /users/{userId} {
-      allow get: if isSignedIn();
+      allow read: if isSignedIn();
       allow create, update: if isSignedIn() && request.auth.uid == userId;
     }
   }
