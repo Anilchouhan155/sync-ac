@@ -53,6 +53,7 @@ export default function App() {
   const [onboardingStep, setOnboardingStep] = useState(0);
   const [rooms, setRooms] = useState<Record<string, RoomState>>({});
   const [currentTab, setCurrentTab] = useState<'home' | 'settings'>('home');
+  const [prevRooms, setPrevRooms] = useState<Record<string, RoomState>>({});
   
   // Onboarding Form State
   const [form, setForm] = useState({
@@ -61,6 +62,26 @@ export default function App() {
     room: '',
     userName: ''
   });
+  
+  // Audio Notification
+  const playAlert = (roomName: string, status: string) => {
+    const audio = new Audio('/mixkit-slot-machine-win-alert-1931.wav');
+    audio.play().catch(e => console.log("Audio play blocked by browser", e));
+
+    if ('Notification' in window && Notification.permission === 'granted') {
+      new Notification('AC Sync Update', {
+        body: `${roomName} was turned ${status.toUpperCase()}`,
+        icon: 'https://cdn-icons-png.flaticon.com/512/2921/2921571.png'
+      });
+    }
+  };
+
+  const requestNotificationPermission = async () => {
+    if ('Notification' in window && Notification.permission !== 'granted') {
+      const permission = await Notification.requestPermission();
+      console.log('Notification permission:', permission);
+    }
+  };
 
   // 1. Auth & Session Persistence
   useEffect(() => {
@@ -71,18 +92,18 @@ export default function App() {
           await signInFrictionless();
         } catch (e: any) {
           console.error("Frictionless sign-in failed", e);
-          // If anonymous auth is disabled, user must enable it in Firebase Console
           if (e.code === 'auth/admin-restricted-operation') {
-            alert("Error: Anonymous Authentication is disabled. Please enable it in the Firebase Console under Authentication > Sign-in method.");
+            alert("Error: Anonymous Authentication is disabled. Please enable it in the Firebase Console.");
           }
         }
       } else {
         setUser(u);
-        // Load Profile
         try {
           const profileDoc = await getDoc(doc(db, 'users', u.uid));
           if (profileDoc.exists()) {
             setProfile(profileDoc.data() as UserProfile);
+            // Request permission once profile is loaded
+            requestNotificationPermission();
           }
         } catch (e) {
           console.error("Profile load failed", e);
@@ -95,7 +116,7 @@ export default function App() {
 
   // 2. Real-time Synced State for Flat
   useEffect(() => {
-    if (!profile) return;
+    if (!profile || !user) return;
 
     const roomsRef = collection(db, 'flats', profile.flatId, 'rooms');
     const unsubscribe = onSnapshot(roomsRef, (snapshot) => {
@@ -103,11 +124,22 @@ export default function App() {
       snapshot.forEach(doc => {
         state[doc.id] = doc.data() as RoomState;
       });
+
+      // Detect Remote Changes for Notifications
+      snapshot.docChanges().forEach(change => {
+        if (change.type === 'modified') {
+          const data = change.doc.data() as RoomState;
+          if (data.updatedBy !== user.uid) {
+            playAlert(change.doc.id, data.status);
+          }
+        }
+      });
+
       setRooms(state);
     });
 
     return () => unsubscribe();
-  }, [profile]);
+  }, [profile, user]);
 
   // 3. Actions
   const handleOnboarding = async () => {
@@ -328,7 +360,7 @@ export default function App() {
 
   return (
     <div className="min-h-screen bg-[#F4F4F7] font-sans text-[#1A1A1A]">
-      <div className="max-w-md mx-auto p-5 pb-24 h-full flex flex-col gap-4">
+      <div className="max-w-md mx-auto p-5 pb-10 h-full flex flex-col gap-4">
         
         {currentTab === 'home' ? (
           <>
@@ -343,9 +375,14 @@ export default function App() {
                   <p className="text-[10px] font-black uppercase tracking-widest text-neutral-400 leading-none">Flat Management</p>
                 </div>
               </div>
-              <div className="flex -space-x-2">
-                <div className="w-9 h-9 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-sm font-bold text-indigo-600 uppercase shadow-sm">{profile.name[0]}</div>
-              </div>
+              <button 
+                onClick={() => setCurrentTab('settings')}
+                className="flex -space-x-2 cursor-pointer transition-transform active:scale-90"
+              >
+                <div className="w-9 h-9 rounded-full bg-indigo-100 border-2 border-white flex items-center justify-center text-sm font-bold text-indigo-600 uppercase shadow-sm">
+                  {profile.name[0]}
+                </div>
+              </button>
             </div>
 
             {/* Global Summary Bento */}
@@ -435,9 +472,19 @@ export default function App() {
             </div>
           </>
         ) : (
-          <div className="space-y-6 pt-12">
+          <div className="space-y-6 pt-4">
+            <div className="flex items-center gap-4 mb-4">
+              <button 
+                onClick={() => setCurrentTab('home')}
+                className="w-10 h-10 bg-white border border-neutral-200 rounded-xl flex items-center justify-center text-neutral-400 hover:text-indigo-600 transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-5 h-5 rotate-180" />
+              </button>
+              <h1 className="text-2xl font-black tracking-tight text-neutral-900">Settings</h1>
+            </div>
+
             <div className="bg-white rounded-[2rem] p-8 shadow-sm border border-neutral-200">
-              <h3 className="text-xl font-black tracking-tight mb-6">User Settings</h3>
+              <h3 className="text-xl font-black tracking-tight mb-6">User Profile</h3>
               <div className="space-y-4">
                 <div className="flex justify-between items-center p-4 bg-neutral-50 rounded-2xl">
                   <span className="text-sm font-bold text-neutral-500">Name</span>
@@ -467,29 +514,6 @@ export default function App() {
           </div>
         )}
 
-      </div>
-
-      {/* Floating Info */}
-      <div className="fixed bottom-0 left-0 right-0 p-6 pointer-events-none">
-        <div className="max-w-md mx-auto pointer-events-auto">
-          <div className="bg-white/90 backdrop-blur-xl p-3 rounded-full border border-neutral-200 shadow-2xl flex justify-around items-center">
-            <button 
-              onClick={() => setCurrentTab('home')}
-              className={cn("p-4 rounded-full transition-all active:scale-90 cursor-pointer", currentTab === 'home' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-neutral-400 hover:bg-neutral-100")}
-            >
-              <Home className="w-6 h-6 outline-none" />
-            </button>
-            <div className="w-12 h-12 bg-neutral-900 rounded-full flex items-center justify-center text-white shadow-lg shadow-neutral-200 active:scale-90 transition-all cursor-pointer">
-               <LayoutGrid className="w-5 h-5" />
-            </div>
-            <button 
-              onClick={() => setCurrentTab('settings')}
-              className={cn("p-4 rounded-full transition-all active:scale-90 cursor-pointer", currentTab === 'settings' ? "bg-indigo-600 text-white shadow-lg shadow-indigo-100" : "text-neutral-400 hover:bg-neutral-100")}
-            >
-              <User className="w-6 h-6 outline-none" />
-            </button>
-          </div>
-        </div>
       </div>
     </div>
   );
