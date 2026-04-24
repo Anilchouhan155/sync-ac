@@ -1,0 +1,6 @@
+{
+  "name": "AC Sync PWA",
+  "description": "Frictionless mobile-first AC coordination for shared flats.",
+  "requestFramePermissions": ["notifications"],
+  "majorCapabilities": []
+}

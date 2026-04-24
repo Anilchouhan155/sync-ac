@@ -1,0 +1,28 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Flat data is accessible if you are signed in
+    match /flats/{flatId} {
+      allow get: if isSignedIn();
+      allow create: if isSignedIn();
+      
+      match /rooms/{roomName} {
+        allow read: if isSignedIn();
+        allow write: if isSignedIn();
+      }
+    }
+
+    match /users/{userId} {
+      allow get: if isSignedIn();
+      allow create, update: if isSignedIn() && request.auth.uid == userId;
+    }
+  }
+}

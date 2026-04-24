@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "Flat": {
+      "title": "Flat",
+      "description": "Configuration for a specific household/flat.",
+      "type": "object",
+      "properties": {
+        "number": { "type": "string" },
+        "type": { "type": "string", "enum": ["2 BHK", "3 BHK"] }
+      },
+      "required": ["number", "type"]
+    },
+    "User": {
+      "title": "User",
+      "description": "Profile associated with an anonymous browser session.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "flatId": { "type": "string" },
+        "room": { "type": "string" }
+      },
+      "required": ["name", "flatId", "room"]
+    },
+    "RoomState": {
+      "title": "Room State",
+      "description": "Current status of an AC in a specific room.",
+      "type": "object",
+      "properties": {
+        "status": { "type": "string", "enum": ["on", "off"] },
+        "updatedBy": { "type": "string" },
+        "updatedByName": { "type": "string" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "/flats/{flatId}": {
+      "schema": "Flat",
+      "description": "The root flat configuration."
+    },
+    "/flats/{flatId}/rooms/{roomName}": {
+      "schema": "RoomState",
+      "description": "Direct AC statuses for rooms in this flat."
+    },
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "User profiles."
+    }
+  }
+}
